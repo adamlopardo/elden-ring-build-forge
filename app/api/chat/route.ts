@@ -52,11 +52,12 @@ Given a specific build's items, stats, and acquisition data, produce a concrete,
 
 Rules:
 - Answer specifically about THIS build using the provided build context. Do not invent items not in the build.
-- Structure the route in clear phases (e.g. Early Game, Mid Game, Late Game / DLC) with ordered steps.
-- Call out rune-farming spots appropriate to the player's progress.
-- For DLC items, note the Scadutree Blessing priority.
-- Use clean Markdown: short headers, ordered/unordered lists, bold for item names. Keep it tight and actionable.
-- Do not reproduce copyrighted in-game flavor text; describe locations and mechanics in your own words.`;
+- BE CONCISE. Aim for ~250 words. No intro, no preamble, no summary paragraph — lead straight into the route.
+- Structure it in 2-4 short phases (e.g. Early / Mid / Late-DLC), each a few terse ordered steps. One line per step.
+- Prioritize the pickup ORDER of the build's actual items and one good rune-farm spot. Skip general tips.
+- For DLC items, add a one-line Scadutree Blessing note only if relevant.
+- Use clean Markdown: bold item names, short bullet/numbered lists, minimal prose. Every line must earn its place.
+- Do not reproduce copyrighted in-game flavor text; describe locations in your own words.`;
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 1200,
+        max_tokens: 800,
         stream: true,
         system: SYSTEM_PROMPT,
         messages: anthropicMessages,
