@@ -16,6 +16,36 @@ interface ChatMessage {
   content: string;
 }
 
+// Keep only the fields relevant to an acquisition route. Anything the planner
+// doesn't need (fantasy text, ratings, tier, softcap notes, playstyle prose) is
+// dropped to reduce input tokens.
+const ROUTE_FIELDS = [
+  "name",
+  "archetype",
+  "startingClass",
+  "startingClassWhy",
+  "targetLevel",
+  "stats",
+  "levelingOrder",
+  "milestones",
+  "weapons",
+  "ashesOfWar",
+  "spells",
+  "talismans",
+  "dlcNotes",
+  "scadutreePriority",
+] as const;
+
+function trimBuildContext(build: unknown): Record<string, unknown> {
+  if (!build || typeof build !== "object") return {};
+  const src = build as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of ROUTE_FIELDS) {
+    if (src[key] !== undefined) out[key] = src[key];
+  }
+  return out;
+}
+
 const SYSTEM_PROMPT = `You are a master Elden Ring guide and theorycrafter. You are advising on the LATEST patch (Calibration 1.16, the Shadow of the Erdtree era).
 
 Given a specific build's items, stats, and acquisition data, produce a concrete, ORDERED acquisition route assuming the player is starting a fresh character. Be specific about map regions, the sequence of areas and bosses to clear, where to farm runes to reach the target level, and the exact pickup order for every weapon, talisman, spell, and Ash of War in the build.
@@ -52,12 +82,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No messages provided." }, { status: 400 });
   }
 
-  // Inject the full build object as context on the first user turn.
+  // Inject the build as context on the first user turn — but only the fields
+  // a route planner actually needs (item locations, stats, leveling, DLC).
+  // Dropping rating/tier/flavor fields and pretty-print whitespace trims input
+  // tokens, which lowers latency and cost with no loss of answer quality.
   const contextBlock = body.buildContext
-    ? `Here is the FULL build the player is asking about (JSON). Use it as ground truth:\n\n${JSON.stringify(
-        body.buildContext,
-        null,
-        2
+    ? `Here is the build the player is asking about (JSON). Use it as ground truth:\n\n${JSON.stringify(
+        trimBuildContext(body.buildContext)
       )}`
     : "";
 
@@ -79,7 +110,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 1500,
+        max_tokens: 1200,
         stream: true,
         system: SYSTEM_PROMPT,
         messages: anthropicMessages,
