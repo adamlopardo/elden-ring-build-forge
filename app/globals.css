@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: "Cormorant Garamond", "Georgia", serif;
+  --font-body: "Inter", system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-obsidian text-stone-200 font-body antialiased;
+    background-image:
+      radial-gradient(ellipse at 50% -10%, rgba(212, 162, 58, 0.12), transparent 55%),
+      radial-gradient(ellipse at 85% 115%, rgba(155, 111, 201, 0.07), transparent 50%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display), Georgia, serif;
+    @apply tracking-tight;
+  }
+}
+
+@layer components {
+  .forge-card {
+    @apply rounded-lg border border-obsidian-600 bg-obsidian-800/70 backdrop-blur-sm transition-all duration-300;
+  }
+  .forge-card:hover {
+    @apply border-ember-deep shadow-ember -translate-y-0.5;
+  }
+
+  .ember-divider {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgba(212, 162, 58, 0.5),
+      transparent
+    );
+  }
+
+  .pill {
+    @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .gold-text {
+    @apply bg-gradient-to-b from-ember-light to-ember-deep bg-clip-text text-transparent;
+  }
+
+  .btn-ember {
+    @apply rounded-md border border-ember-deep bg-ember/10 px-4 py-2 text-ember-light
+      font-medium transition-all hover:bg-ember/20 hover:shadow-ember
+      disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+}
+
+/* Custom scrollbar for the dark theme */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #121216;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a3a44;
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a87420;
+}
+
+/* Markdown rendering inside the chat panel */
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  @apply font-display text-ember-light mt-4 mb-2;
+}
+.markdown-body h1 { @apply text-xl; }
+.markdown-body h2 { @apply text-lg; }
+.markdown-body h3 { @apply text-base; }
+.markdown-body p { @apply my-2 leading-relaxed text-stone-300; }
+.markdown-body ul { @apply my-2 list-disc pl-5 space-y-1 text-stone-300; }
+.markdown-body ol { @apply my-2 list-decimal pl-5 space-y-1 text-stone-300; }
+.markdown-body li { @apply leading-relaxed; }
+.markdown-body strong { @apply text-ember-light font-semibold; }
+.markdown-body a { @apply text-frost underline; }
+.markdown-body code {
+  @apply rounded bg-obsidian-700 px-1 py-0.5 text-ember-light text-sm;
+}
+.markdown-body hr { @apply my-4 border-obsidian-600; }
+.markdown-body table { @apply my-3 w-full border-collapse text-sm; }
+.markdown-body th,
+.markdown-body td { @apply border border-obsidian-600 px-2 py-1 text-left; }
