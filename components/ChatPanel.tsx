@@ -33,6 +33,11 @@ export default function ChatPanel({ build }: { build: Build }) {
     setInput("");
     setLoading(true);
 
+    const scrollToBottom = () =>
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+      });
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -40,18 +45,40 @@ export default function ChatPanel({ build }: { build: Build }) {
         body: JSON.stringify({ messages: nextMessages, buildContext: build }),
       });
 
-      const data = await res.json();
+      // Errors come back as JSON; a successful answer streams as plain text.
       if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || `Request failed (${res.status}).`);
       }
-      setMessages([...nextMessages, { role: "assistant", content: data.text }]);
+      if (!res.body) throw new Error("No response stream from the Forge.");
+
+      // Append an empty assistant message, then fill it as chunks arrive.
+      setMessages([...nextMessages, { role: "assistant", content: "" }]);
+      setLoading(false);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let acc = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        setMessages([...nextMessages, { role: "assistant", content: acc }]);
+        scrollToBottom();
+      }
+
+      if (!acc.trim()) {
+        setMessages([
+          ...nextMessages,
+          { role: "assistant", content: "The Forge fell silent. Try asking again." },
+        ]);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
-      requestAnimationFrame(() => {
-        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-      });
+      scrollToBottom();
     }
   }
 

@@ -68,8 +68,9 @@ export async function POST(req: NextRequest) {
     return { role: m.role, content: m.content };
   });
 
+  let upstream: Response;
   try {
-    const res = await fetch(ANTHROPIC_URL, {
+    upstream = await fetch(ANTHROPIC_URL, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -79,33 +80,85 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 1500,
+        stream: true,
         system: SYSTEM_PROMPT,
         messages: anthropicMessages,
       }),
     });
-
-    if (!res.ok) {
-      const detail = await res.text();
-      return NextResponse.json(
-        { error: `Anthropic API error (${res.status}). ${detail.slice(0, 400)}` },
-        { status: 502 }
-      );
-    }
-
-    const data = await res.json();
-    const text =
-      Array.isArray(data?.content)
-        ? data.content
-            .filter((c: { type: string }) => c.type === "text")
-            .map((c: { text: string }) => c.text)
-            .join("\n")
-        : "";
-
-    return NextResponse.json({ text: text || "The Forge fell silent. Try asking again." });
   } catch (err) {
     return NextResponse.json(
       { error: `Failed to reach the Anthropic API: ${(err as Error).message}` },
       { status: 502 }
     );
   }
+
+  // Errors (bad key, rate limit, etc.) surface before any streaming starts,
+  // so the client still receives a clean JSON error it can display.
+  if (!upstream.ok || !upstream.body) {
+    const detail = await upstream.text().catch(() => "");
+    return NextResponse.json(
+      { error: `Anthropic API error (${upstream.status}). ${detail.slice(0, 400)}` },
+      { status: 502 }
+    );
+  }
+
+  // Parse Anthropic's Server-Sent Events and re-emit only the text deltas as a
+  // plain UTF-8 text stream. The frontend just reads and appends chunks.
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const reader = upstream.body!.getReader();
+      const decoder = new TextDecoder();
+      const encoder = new TextEncoder();
+      let buffer = "";
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // SSE frames are separated by blank lines; process complete lines.
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data:")) continue;
+            const payload = trimmed.slice(5).trim();
+            if (!payload || payload === "[DONE]") continue;
+
+            try {
+              const evt = JSON.parse(payload);
+              if (
+                evt.type === "content_block_delta" &&
+                evt.delta?.type === "text_delta" &&
+                typeof evt.delta.text === "string"
+              ) {
+                controller.enqueue(encoder.encode(evt.delta.text));
+              } else if (evt.type === "error") {
+                const msg = evt.error?.message || "The Forge fell silent mid-answer.";
+                controller.enqueue(encoder.encode(`\n\n_[Error: ${msg}]_`));
+              }
+            } catch {
+              // Ignore keep-alive pings and non-JSON frames.
+            }
+          }
+        }
+      } catch (err) {
+        controller.enqueue(
+          encoder.encode(`\n\n_[Stream interrupted: ${(err as Error).message}]_`)
+        );
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      "x-accel-buffering": "no",
+    },
+  });
 }
